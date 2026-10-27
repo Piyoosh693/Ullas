@@ -3,9 +3,8 @@ services:
     name: ullas-backend
     runtime: node
     region: singapore
-    plan: starter
+    plan: free
     buildCommand: npm ci
-    preDeployCommand: npm run db:migrate
     startCommand: npm run start:server
     healthCheckPath: /api/ready
     envVars:
