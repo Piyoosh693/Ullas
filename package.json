@@ -1,0 +1,23 @@
+{
+  "name": "ullas-v1-render-migration",
+  "private": true,
+  "workspaces": [
+    "server",
+    "web"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "npm --workspace server test",
+    "test:server": "npm --workspace server test",
+    "build": "npm --workspace web run build",
+    "build:web": "npm --workspace web run build",
+    "dev:server": "npm --workspace server run dev",
+    "dev:web": "npm --workspace web run dev",
+    "start:server": "npm --workspace server run start",
+    "db:migrate": "npm --workspace server run db:migrate",
+    "email:dispatch": "npm --workspace server run email:dispatch",
+    "test:db": "npm --workspace server run test:db"
+  }
+}
