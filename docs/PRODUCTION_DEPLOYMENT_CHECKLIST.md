@@ -40,8 +40,9 @@ Use this checklist only after the code is tested. Do not deploy this build direc
 - [ ] `PUBLIC_APP_URL` is the exact HTTPS origin used for verification/reset links.
 - [ ] `SESSION_SECRET` is unique and at least 32 characters.
 - [ ] `ADMIN_BOOTSTRAP_SECRET` is unique and at least 32 characters; remove/rotate it after first admin bootstrap.
-- [ ] `RESEND_API_KEY` contains the actual server-side key.
-- [ ] `RESEND_FROM_EMAIL` uses a verified sender address/domain.
+- [ ] `SMTP_USER` is set to a Gmail address with 2-Step Verification enabled.
+- [ ] `SMTP_PASS` is set to the Gmail App Password (not the regular Gmail password).
+- [ ] `SMTP_FROM_EMAIL` is set (optional; defaults to `SMTP_USER`).
 - [ ] `PGSSL=require` if needed by the provider.
 - [ ] `COOKIE_SAME_SITE=lax` unless a documented cross-site requirement justifies another setting.
 

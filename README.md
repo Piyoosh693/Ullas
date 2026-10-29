@@ -9,14 +9,14 @@ This repository is the Render-oriented application source. It includes a React/V
 - **Frontend:** React + Vite, deployed as a Render Static Site.
 - **API:** Node.js 20+ and Express, deployed as a Render Web Service.
 - **Persistence:** PostgreSQL. Real application execution requires `DATABASE_URL`; in-memory stores are used only by the isolated test suite.
-- **Email:** Resend API, called only by the backend. Emails are queued in the PostgreSQL `email_outbox` table and retried by the API worker.
+- **Email:** Gmail SMTP (via Nodemailer), called only by the backend. Emails are queued in the PostgreSQL `email_outbox` table and retried by the API worker.
 - **Session/auth:** Server-managed sessions persisted in PostgreSQL; hashed passwords and hashed session/reset/verification token values.
 
 ## Prerequisites
 
 - Node.js 20 or newer and npm.
 - PostgreSQL 14+ for local development/testing (current Render PostgreSQL is also suitable).
-- A Resend account and verified sender/domain for real transactional email.
+- A Gmail account with 2-Step Verification enabled and an App Password for sending transactional emails (no custom domain needed).
 - Render and GitHub accounts for deployment.
 
 ## Local setup
@@ -84,8 +84,11 @@ The frontend dev server defaults to `http://localhost:5173`; the API defaults to
 | `PUBLIC_APP_URL` | Exact public HTTPS frontend origin used in email links. |
 | `SESSION_SECRET` | Unique secret, at least 32 characters in production. |
 | `ADMIN_BOOTSTRAP_SECRET` | One-time guarded first-admin provisioning secret. Store it only in server environment settings. |
-| `RESEND_API_KEY` | Backend-only Resend API key. Required in production. |
-| `RESEND_FROM_EMAIL` | Sender address on a verified Resend domain. Required in production. |
+| `SMTP_USER` | SMTP login email (e.g. your Gmail address). Required in production. |
+| `SMTP_PASS` | SMTP password (Gmail App Password). Required in production. |
+| `SMTP_FROM_EMAIL` | Sender display name and address, e.g. `Ullas <you@gmail.com>`. Defaults to `SMTP_USER`. |
+| `SMTP_HOST` | SMTP server hostname. Defaults to `smtp.gmail.com`. |
+| `SMTP_PORT` | SMTP port. Defaults to `465`. |
 | `VITE_API_URL` | Frontend API base URL, ending in `/api`, e.g. `https://your-api.onrender.com/api`. This is public configuration, not a secret. |
 | `PGSSL` | Use `require` for TLS where required by the database provider; local PostgreSQL can use `disable`. |
 | `COOKIE_SAME_SITE` | `lax` by default. Coordinate this with frontend/backend domain arrangement; do not select `none` casually. |
@@ -104,7 +107,7 @@ Public signup can only create non-privileged user roles. After the database migr
 2. In Render, create a new Blueprint and connect that repository. Inspect the proposed services and database before approving sync.
 3. Choose a **paid, suitable PostgreSQL plan for production** and understand the cost before creating a production database. Render's Free Postgres is for testing and expires after 30 days; it does not provide production backup guarantees. Free compute can also spin down. See the official [Render Free instance limits](https://render.com/docs/free).
 4. Set `FRONTEND_URL` and `PUBLIC_APP_URL` to the deployed frontend origin (exact HTTPS origin, no path/trailing slash) and set `VITE_API_URL` to the deployed API URL ending in `/api`.
-5. Set `RESEND_API_KEY` and `RESEND_FROM_EMAIL` using a verified sender. Never paste actual secret values into GitHub or chat.
+5. Set `SMTP_USER` and `SMTP_PASS` with a Gmail address and its App Password. Optionally set `SMTP_FROM_EMAIL`. Never paste actual secret values into GitHub or chat.
 6. Run migrations using the configured pre-deploy command or once as a controlled release step. Do not assume a database is initialized merely because the API starts.
 7. Confirm `/api/health` and `/api/ready` return successful responses, then test the entire critical path using test accounts and real email delivery.
 8. Configure backups/restore, monitoring, and rollback before inviting real users.

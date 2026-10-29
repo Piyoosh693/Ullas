@@ -22,9 +22,11 @@ services:
         generateValue: true
       - key: DATABASE_URL
         sync: false
-      - key: RESEND_API_KEY
+      - key: SMTP_USER
         sync: false
-      - key: RESEND_FROM_EMAIL
+      - key: SMTP_PASS
+        sync: false
+      - key: SMTP_FROM_EMAIL
         sync: false
       - key: PGSSL
         value: require
