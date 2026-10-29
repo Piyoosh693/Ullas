@@ -26,11 +26,20 @@ function getTransporter() {
   if (_transporter) return _transporter;
   const user = process.env.SMTP_USER;
   const pass = process.env.SMTP_PASS;
-  const host = process.env.SMTP_HOST || 'smtp.gmail.com';
-  const port = Number(process.env.SMTP_PORT || 465);
-  const secure = process.env.SMTP_SECURE !== 'false'; // true by default (port 465)
   if (!user || !pass) return null;
-  _transporter = nodemailer.createTransport({ host, port, secure, auth: { user, pass } });
+
+  // If custom host is provided, use custom host/port, otherwise default to Nodemailer's well-known 'gmail' service.
+  if (process.env.SMTP_HOST) {
+    const host = process.env.SMTP_HOST;
+    const port = Number(process.env.SMTP_PORT || 587);
+    const secure = process.env.SMTP_SECURE === 'true';
+    _transporter = nodemailer.createTransport({ host, port, secure, auth: { user, pass } });
+  } else {
+    _transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: { user, pass },
+    });
+  }
   return _transporter;
 }
 
@@ -69,7 +78,9 @@ async function dispatchOutboxBatch(limit = 20) {
       });
       await query("UPDATE email_outbox SET status='sent',sent_at=NOW(),last_error=NULL,html_body='',text_body='',updated_at=NOW() WHERE id=$1", [item.id]);
       sent += 1;
+      console.log(`[Email] Successfully sent email to ${item.recipient} (Subject: "${item.subject}")`);
     } catch (error) {
+      console.error(`[Email Error] Failed to send email to ${item.recipient}:`, error.message, error.code || '');
       const attempts = Number(item.attempts || 0) + 1;
       const delayMinutes = Math.min(60, 2 ** Math.min(attempts, 6));
       await query("UPDATE email_outbox SET status='failed',last_error=$2,next_attempt_at=NOW()+($3 * INTERVAL '1 minute'),updated_at=NOW() WHERE id=$1", [item.id, String(error.message).slice(0, 500), delayMinutes]).catch(() => {});
