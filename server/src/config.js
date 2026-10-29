@@ -22,7 +22,7 @@ function validateEnv(env = process.env) {
   const nodeEnv = env.NODE_ENV || 'development';
   const production = nodeEnv === 'production';
   const required = ['DATABASE_URL', 'FRONTEND_URL', 'SESSION_SECRET', 'ADMIN_BOOTSTRAP_SECRET'];
-  if (production) required.push('PUBLIC_APP_URL', 'RESEND_API_KEY', 'RESEND_FROM_EMAIL');
+  if (production) required.push('PUBLIC_APP_URL', 'SMTP_USER', 'SMTP_PASS');
 
   const missing = required.filter((key) => !env[key] || String(env[key]).trim() === '');
   if (missing.length) throw invalid(`Missing required environment variables: ${missing.join(', ')}`);
@@ -51,14 +51,11 @@ function validateEnv(env = process.env) {
     if (!origins.includes(String(env.PUBLIC_APP_URL))) {
       throw invalid('PUBLIC_APP_URL must match one of the trusted FRONTEND_URL origins');
     }
-    if (String(env.RESEND_API_KEY).length < 12 || /re_replace_me|example|changeme/i.test(env.RESEND_API_KEY)) {
-      throw invalid('RESEND_API_KEY must be a real Resend API key in production');
+    if (String(env.SMTP_USER).length < 5 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(env.SMTP_USER))) {
+      throw invalid('SMTP_USER must be a valid email address (e.g. your Gmail address)');
     }
-    const sender = String(env.RESEND_FROM_EMAIL);
-    const address = sender.match(/<([^<>]+)>/)?.[1] || sender;
-    const senderDomain = address.split('@')[1]?.toLowerCase() || '';
-    if (!/^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$/.test(address) || /example\.(com|org|net|test)$/i.test(address) || /\.(test|example|invalid|localhost|local)$/i.test(senderDomain)) {
-      throw invalid('RESEND_FROM_EMAIL must contain a valid, verified sender email address');
+    if (String(env.SMTP_PASS).length < 8) {
+      throw invalid('SMTP_PASS must be set (use a Gmail App Password, at least 16 characters)');
     }
   }
 

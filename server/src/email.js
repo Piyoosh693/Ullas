@@ -1,4 +1,5 @@
 const { v4: uuidv4 } = require('uuid');
+const nodemailer = require('nodemailer');
 const { query, isTestMode, withTransaction } = require('./db');
 
 const testOutbox = [];
@@ -19,14 +20,31 @@ async function queueEmail({ to, subject, html, text, eventKey }) {
   void dispatchOutboxBatch(5).catch((error) => console.error('Email outbox dispatch deferred', { code: error.code || 'EMAIL_DISPATCH_ERROR' }));
   return { queued: true, ...result.rows[0] };
 }
+// Lazily-created reusable transporter (Gmail SMTP or any SMTP provider).
+let _transporter = null;
+function getTransporter() {
+  if (_transporter) return _transporter;
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASS;
+  const host = process.env.SMTP_HOST || 'smtp.gmail.com';
+  const port = Number(process.env.SMTP_PORT || 465);
+  const secure = process.env.SMTP_SECURE !== 'false'; // true by default (port 465)
+  if (!user || !pass) return null;
+  _transporter = nodemailer.createTransport({ host, port, secure, auth: { user, pass } });
+  return _transporter;
+}
+
 async function dispatchOutboxBatch(limit = 20) {
   if (isTestMode()) {
     for (const item of testOutbox) item.status = 'pending';
     return { attempted: 0, sent: 0 };
   }
-  const key = process.env.RESEND_API_KEY;
-  const from = process.env.RESEND_FROM_EMAIL;
-  if (!key || !from) return { attempted: 0, sent: 0, skipped: true };
+  const transporter = getTransporter();
+  const from = process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER;
+  if (!transporter || !from) {
+    console.warn('Email dispatch skipped: SMTP_USER and SMTP_PASS must be set');
+    return { attempted: 0, sent: 0, skipped: true };
+  }
   // Surface worker crashes instead of leaving outbox rows stuck in `sending` forever.
   await query("UPDATE email_outbox SET status='failed',last_error=COALESCE(last_error,'Dispatch worker stopped before completion'),updated_at=NOW() WHERE status='sending' AND attempts >= 8 AND updated_at <= NOW() - INTERVAL '10 minutes'").catch(() => {});
   const picked = await withTransaction(async (client) => client.query(
@@ -42,16 +60,13 @@ async function dispatchOutboxBatch(limit = 20) {
   let sent = 0;
   for (const item of result.rows) {
     try {
-      const response = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', 'Idempotency-Key': require('node:crypto').createHash('sha256').update(String(item.event_key)).digest('hex') },
-        body: JSON.stringify({ from, to: [item.recipient], subject: item.subject, html: item.html_body, text: item.text_body || undefined }),
-        signal: AbortSignal.timeout(10_000),
+      await transporter.sendMail({
+        from,
+        to: item.recipient,
+        subject: item.subject,
+        html: item.html_body,
+        text: item.text_body || undefined,
       });
-      if (!response.ok) {
-        // Do not retain provider response bodies: they can contain addresses or request details.
-        throw new Error(`Email provider returned HTTP ${response.status}`);
-      }
       await query("UPDATE email_outbox SET status='sent',sent_at=NOW(),last_error=NULL,html_body='',text_body='',updated_at=NOW() WHERE id=$1", [item.id]);
       sent += 1;
     } catch (error) {
