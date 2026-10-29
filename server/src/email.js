@@ -49,8 +49,10 @@ async function dispatchOutboxBatch(limit = 20) {
     return { attempted: 0, sent: 0 };
   }
   const transporter = getTransporter();
-  const from = process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER;
-  if (!transporter || !from) {
+  const senderEmail = process.env.SMTP_USER;
+  // Use structured address object so Nodemailer creates RFC-compliant "Ullas <email@gmail.com>" headers automatically.
+  const from = process.env.SMTP_FROM_EMAIL || { name: 'Ullas', address: senderEmail };
+  if (!transporter || !senderEmail) {
     console.warn('Email dispatch skipped: SMTP_USER and SMTP_PASS must be set');
     return { attempted: 0, sent: 0, skipped: true };
   }
@@ -94,7 +96,39 @@ function escapeHtml(value) {
 }
 function emailTemplate(title, message, link, buttonText) {
   const safeLink = escapeHtml(link);
-  return `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;line-height:1.6;color:#172033"><h2>${escapeHtml(title)}</h2><p>${escapeHtml(message)}</p><p><a href="${safeLink}" style="display:inline-block;padding:12px 18px;background:#2459db;color:#fff;text-decoration:none;border-radius:8px">${escapeHtml(buttonText)}</a></p><p>If you did not request this, you can ignore this email.</p><p>— Ullas</p></div>`;
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${escapeHtml(title)}</title>
+</head>
+<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;margin:0;padding:24px;background-color:#f8fafc;color:#1e293b;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;border:1px solid #e2e8f0;overflow:hidden;">
+    <tr>
+      <td style="padding:32px 28px 16px;">
+        <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#0f172a;">${escapeHtml(title)}</h1>
+        <p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:#334155;">${escapeHtml(message)}</p>
+        <p style="margin:0 0 24px;">
+          <a href="${safeLink}" target="_blank" style="display:inline-block;padding:12px 24px;background-color:#2563eb;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;border-radius:8px;">${escapeHtml(buttonText)}</a>
+        </p>
+        <p style="margin:0 0 8px;font-size:13px;line-height:1.5;color:#64748b;">
+          If the button above does not work, copy and paste this link into your browser:
+        </p>
+        <p style="margin:0 0 24px;font-size:12px;word-break:break-all;color:#2563eb;">
+          <a href="${safeLink}" style="color:#2563eb;text-decoration:underline;">${safeLink}</a>
+        </p>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding:16px 28px;background:#f1f5f9;border-top:1px solid #e2e8f0;font-size:12px;color:#64748b;line-height:1.5;">
+        <p style="margin:0 0 4px;">You received this automated notification because an action was requested for your Ullas account.</p>
+        <p style="margin:0;">If you did not request this, you can safely ignore this email.</p>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
 }
 async function sendActivityEmail(email, { subject, title, message, path = '/', eventKey, buttonText = 'Open Ullas' }) {
   const safePath = String(path).startsWith('/') && !String(path).startsWith('//') ? String(path) : '/';
