@@ -22,12 +22,12 @@ services:
         generateValue: true
       - key: DATABASE_URL
         sync: false
-      - key: SMTP_USER
+      - key: BREVO_API_KEY
         sync: false
-      - key: SMTP_PASS
+      - key: BREVO_FROM_EMAIL
         sync: false
-      - key: SMTP_FROM_EMAIL
-        sync: false
+      - key: BREVO_FROM_NAME
+        value: Ullas
       - key: PGSSL
         value: require
 
