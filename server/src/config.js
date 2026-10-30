@@ -22,7 +22,7 @@ function validateEnv(env = process.env) {
   const nodeEnv = env.NODE_ENV || 'development';
   const production = nodeEnv === 'production';
   const required = ['DATABASE_URL', 'FRONTEND_URL', 'SESSION_SECRET', 'ADMIN_BOOTSTRAP_SECRET'];
-  if (production) required.push('PUBLIC_APP_URL', 'SMTP_USER', 'SMTP_PASS');
+  if (production) required.push('PUBLIC_APP_URL', 'BREVO_API_KEY', 'BREVO_FROM_EMAIL');
 
   const missing = required.filter((key) => !env[key] || String(env[key]).trim() === '');
   if (missing.length) throw invalid(`Missing required environment variables: ${missing.join(', ')}`);
@@ -51,11 +51,12 @@ function validateEnv(env = process.env) {
     if (!origins.includes(String(env.PUBLIC_APP_URL))) {
       throw invalid('PUBLIC_APP_URL must match one of the trusted FRONTEND_URL origins');
     }
-    if (String(env.SMTP_USER).length < 5 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(env.SMTP_USER))) {
-      throw invalid('SMTP_USER must be a valid email address (e.g. your Gmail address)');
+    if (String(env.BREVO_API_KEY).length < 20) {
+      throw invalid('BREVO_API_KEY must be a valid Brevo API key in production');
     }
-    if (String(env.SMTP_PASS).length < 8) {
-      throw invalid('SMTP_PASS must be set (use a Gmail App Password, at least 16 characters)');
+    const brevoFrom = String(env.BREVO_FROM_EMAIL);
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(brevoFrom)) {
+      throw invalid('BREVO_FROM_EMAIL must be a valid sender email address verified in Brevo');
     }
   }
 

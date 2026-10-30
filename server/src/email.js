@@ -1,5 +1,4 @@
 const { v4: uuidv4 } = require('uuid');
-const nodemailer = require('nodemailer');
 const { query, isTestMode, withTransaction } = require('./db');
 
 const testOutbox = [];
@@ -20,32 +19,29 @@ async function queueEmail({ to, subject, html, text, eventKey }) {
   void dispatchOutboxBatch(5).catch((error) => console.error('Email outbox dispatch deferred', { code: error.code || 'EMAIL_DISPATCH_ERROR' }));
   return { queued: true, ...result.rows[0] };
 }
-// Lazily-created reusable transporter (Gmail SMTP or any SMTP provider).
-let _transporter = null;
-function getTransporter() {
-  if (_transporter) return _transporter;
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
-  if (!user || !pass) return null;
-
-  // If custom host is provided, use custom host/port, otherwise default to Nodemailer's well-known 'gmail' service.
-  if (process.env.SMTP_HOST) {
-    const host = process.env.SMTP_HOST;
-    const port = Number(process.env.SMTP_PORT || 587);
-    const secure = process.env.SMTP_SECURE === 'true';
-    _transporter = nodemailer.createTransport({ host, port, secure, auth: { user, pass } });
-  } else {
-    // Port 465 (SSL) is blocked on many cloud platforms including Render free tier.
-    // Use port 587 with STARTTLS instead — reliably allowed on Render.
-    _transporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 587,
-      secure: false, // STARTTLS upgrade happens automatically on port 587
-      requireTLS: true,
-      auth: { user, pass },
-    });
+// Send via Brevo (formerly Sendinblue) HTTP API — avoids SMTP port restrictions on cloud hosts.
+async function sendViaBrevo({ from, to, subject, html, text }) {
+  const apiKey = process.env.BREVO_API_KEY;
+  const fromEmail = process.env.BREVO_FROM_EMAIL || from;
+  const fromName = process.env.BREVO_FROM_NAME || 'Ullas';
+  if (!apiKey || !fromEmail) return null; // not configured
+  const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      sender: { name: fromName, email: fromEmail },
+      to: [{ email: to }],
+      subject,
+      htmlContent: html,
+      textContent: text || undefined,
+    }),
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!response.ok) {
+    const body = await response.text().catch(() => '');
+    throw new Error(`Brevo API returned HTTP ${response.status}: ${body.slice(0, 200)}`);
   }
-  return _transporter;
+  return true;
 }
 
 async function dispatchOutboxBatch(limit = 20) {
@@ -53,14 +49,14 @@ async function dispatchOutboxBatch(limit = 20) {
     for (const item of testOutbox) item.status = 'pending';
     return { attempted: 0, sent: 0 };
   }
-  const transporter = getTransporter();
-  const senderEmail = process.env.SMTP_USER;
-  // Use structured address object so Nodemailer creates RFC-compliant "Ullas <email@gmail.com>" headers automatically.
-  const from = process.env.SMTP_FROM_EMAIL || { name: 'Ullas', address: senderEmail };
-  if (!transporter || !senderEmail) {
-    console.warn('Email dispatch skipped: SMTP_USER and SMTP_PASS must be set');
+
+  const isBrevoConfigured = Boolean(process.env.BREVO_API_KEY && process.env.BREVO_FROM_EMAIL);
+  if (!isBrevoConfigured) {
+    console.warn('Email dispatch skipped: BREVO_API_KEY and BREVO_FROM_EMAIL must be set');
     return { attempted: 0, sent: 0, skipped: true };
   }
+
+  const senderEmail = process.env.BREVO_FROM_EMAIL;
   // Surface worker crashes instead of leaving outbox rows stuck in `sending` forever.
   await query("UPDATE email_outbox SET status='failed',last_error=COALESCE(last_error,'Dispatch worker stopped before completion'),updated_at=NOW() WHERE status='sending' AND attempts >= 8 AND updated_at <= NOW() - INTERVAL '10 minutes'").catch(() => {});
   const picked = await withTransaction(async (client) => client.query(
@@ -76,18 +72,12 @@ async function dispatchOutboxBatch(limit = 20) {
   let sent = 0;
   for (const item of result.rows) {
     try {
-      await transporter.sendMail({
-        from,
-        to: item.recipient,
-        subject: item.subject,
-        html: item.html_body,
-        text: item.text_body || undefined,
-      });
+      await sendViaBrevo({ from: senderEmail, to: item.recipient, subject: item.subject, html: item.html_body, text: item.text_body || undefined });
       await query("UPDATE email_outbox SET status='sent',sent_at=NOW(),last_error=NULL,html_body='',text_body='',updated_at=NOW() WHERE id=$1", [item.id]);
       sent += 1;
-      console.log(`[Email] Successfully sent email to ${item.recipient} (Subject: "${item.subject}")`);
+      console.log(`[Email] Sent to ${item.recipient} — "${item.subject}"`);
     } catch (error) {
-      console.error(`[Email Error] Failed to send email to ${item.recipient}:`, error.message, error.code || '');
+      console.error(`[Email Error] Failed to send to ${item.recipient}:`, error.message);
       const attempts = Number(item.attempts || 0) + 1;
       const delayMinutes = Math.min(60, 2 ** Math.min(attempts, 6));
       await query("UPDATE email_outbox SET status='failed',last_error=$2,next_attempt_at=NOW()+($3 * INTERVAL '1 minute'),updated_at=NOW() WHERE id=$1", [item.id, String(error.message).slice(0, 500), delayMinutes]).catch(() => {});

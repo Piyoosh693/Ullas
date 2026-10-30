@@ -10,8 +10,8 @@ function productionEnv(overrides = {}) {
     PUBLIC_APP_URL: 'https://ullas-frontend.onrender.com',
     SESSION_SECRET: 'a-long-unique-session-secret-for-tests-123456',
     ADMIN_BOOTSTRAP_SECRET: 'a-long-unique-admin-bootstrap-secret-987654',
-    SMTP_USER: 'ullas.noreply@gmail.com',
-    SMTP_PASS: 'abcdefghijklmnop',
+    BREVO_API_KEY: 'xkeysib-test-key-with-sufficient-length-here',
+    BREVO_FROM_EMAIL: 'ullas.noreply@gmail.com',
     COOKIE_SAME_SITE: 'lax',
     ...overrides,
   };
@@ -33,6 +33,6 @@ test('production configuration rejects insecure origins and placeholder email se
   assert.throws(() => validateEnv(productionEnv({ FRONTEND_URL: 'http://ullas-frontend.onrender.com' })), /FRONTEND_URL/);
   assert.throws(() => validateEnv(productionEnv({ PUBLIC_APP_URL: 'https://ullas-frontend.onrender.com/path' })), /PUBLIC_APP_URL/);
   assert.throws(() => validateEnv(productionEnv({ PUBLIC_APP_URL: 'https://other-frontend.onrender.com' })), /trusted FRONTEND_URL/);
-  assert.throws(() => validateEnv(productionEnv({ SMTP_USER: 'bad' })), /SMTP_USER/);
-  assert.throws(() => validateEnv(productionEnv({ SMTP_PASS: 'short' })), /SMTP_PASS/);
+  assert.throws(() => validateEnv(productionEnv({ BREVO_API_KEY: 'short' })), /BREVO_API_KEY/);
+  assert.throws(() => validateEnv(productionEnv({ BREVO_FROM_EMAIL: 'not-an-email' })), /BREVO_FROM_EMAIL/);
 });
