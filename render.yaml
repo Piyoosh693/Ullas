@@ -15,7 +15,7 @@ services:
       - key: PUBLIC_APP_URL
         sync: false
       - key: COOKIE_SAME_SITE
-        value: lax
+        value: none
       - key: SESSION_SECRET
         generateValue: true
       - key: ADMIN_BOOTSTRAP_SECRET

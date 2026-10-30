@@ -13,7 +13,12 @@ const resetRequestSchema = z.object({ email: z.string().email() });
 const resetCompleteSchema = z.object({ token: z.string().min(20).max(256), password: z.string().min(10).max(128) });
 
 function publicUser(user) { return { id: user.id, email: user.email, name: user.name, role: user.role, verified: Boolean(user.verified) }; }
-function cookieOptions() { const sameSite = String(process.env.COOKIE_SAME_SITE || 'lax').toLowerCase(); return { httpOnly: true, sameSite, secure: process.env.NODE_ENV === 'production', path: '/', maxAge: 7 * 24 * 60 * 60 * 1000 }; }
+function cookieOptions() {
+  const sameSite = String(process.env.COOKIE_SAME_SITE || 'lax').toLowerCase();
+  // SameSite=none requires Secure=true or browsers will reject the cookie entirely.
+  const secure = process.env.NODE_ENV === 'production' || sameSite === 'none';
+  return { httpOnly: true, sameSite, secure, path: '/', maxAge: 7 * 24 * 60 * 60 * 1000 };
+}
 function handlePersistenceError(res, error) {
   if (error.code === '23505') return res.status(409).json({ error: 'User already exists' });
   if (error.code === 'DATABASE_URL_REQUIRED') return res.status(503).json({ error: 'Database is not configured' });
