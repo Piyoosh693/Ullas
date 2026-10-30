@@ -35,8 +35,13 @@ function getTransporter() {
     const secure = process.env.SMTP_SECURE === 'true';
     _transporter = nodemailer.createTransport({ host, port, secure, auth: { user, pass } });
   } else {
+    // Port 465 (SSL) is blocked on many cloud platforms including Render free tier.
+    // Use port 587 with STARTTLS instead — reliably allowed on Render.
     _transporter = nodemailer.createTransport({
-      service: 'gmail',
+      host: 'smtp.gmail.com',
+      port: 587,
+      secure: false, // STARTTLS upgrade happens automatically on port 587
+      requireTLS: true,
       auth: { user, pass },
     });
   }
