@@ -9,6 +9,8 @@ async function main(){
   const readiness = await testConnection();
   if (!readiness.ok) throw new Error(`Database is not ready; run migrations before starting the API (${readiness.reason || 'required schema is missing'}).`);
   const server=app.listen(config.port,()=>console.log(`Ullas API listening on port ${config.port}`));
+  // Flush any emails that were queued before a previous spindown (important on Render free tier).
+  dispatchOutboxBatch(20).catch(e=>console.error('Outbox startup flush failed',{code:e.code||'OUTBOX_STARTUP_ERROR'}));
   const dispatcher=setInterval(()=>dispatchOutboxBatch(20).catch(e=>console.error('Outbox retry failed',{code:e.code || 'OUTBOX_RETRY_ERROR', ...(process.env.NODE_ENV === 'production' ? {} : { message:e.message })})),60_000);
   dispatcher.unref();
   const shutdown=async()=>{clearInterval(dispatcher);server.close(async()=>{await closePool();process.exit(0);});setTimeout(()=>process.exit(1),10_000).unref();};
